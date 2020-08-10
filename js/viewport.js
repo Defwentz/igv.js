@@ -39,7 +39,7 @@ function ViewPort(trackView, $container, genomicState, width) {
     this.contentDiv = $div.get(0);
 
     // viewport canvas
-    const $canvas = $('<canvas>');
+    const $canvas = $('<canvas>', {'class': this.guid});
     $(this.contentDiv).append($canvas);
 
     this.canvas = $canvas.get(0);

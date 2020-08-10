@@ -10,6 +10,7 @@
     <title>IGV - Local Bam</title>
 
 
+    <script type="text/javascript" src="igv-test/igv.js/dist/igv.min.js"></script>
     <script type="text/javascript" src="../dist/igv.min.js"></script>
 
 </head>
@@ -20,7 +21,7 @@
     <h1>Local BAM file example</h1>
     <p>
         <label>BAM file and index
-            <input id="fileWidget" type="file" multiple="true" accept=".bam,.bai" onchange="load()"/>
+            <input id="fileWidget" type="file" multiple="true" accept=".bam,.bai,.wig" onchange="load()"/>
         </label>
     </p>
 
@@ -35,7 +36,6 @@
 
 
 <script type="text/javascript">
-
     "use strict";
 
     var igvBrowser;
@@ -73,6 +73,7 @@
         // This scheme catches both.
         var bamFiles = [];
         var indexFiles = {};
+        var wigFiles = []
 
         for (let file of files) {
             if (file.name.endsWith(".bam")) {
@@ -81,6 +82,10 @@
             else if (file.name.endsWith(".bai")) {
                 var key = getKey(file.name);
                 indexFiles[key] = file;
+            }
+            else if (file.name.endsWith(".wig")) {
+                var key = getKey(file.name);
+                wigFiles.push(file);
             }
             else {
                 alert("Unsupported file type: " + file.name);
@@ -107,9 +112,74 @@
                 alert("No index file for: " + file.name);
             }
         }
-
+        
+        // for (let file of wigFiles) {
+        //
+        //     var key = getKey(file.name);
+        //     console.log(file.name)
+        //
+        //     if (file.name.includes('_CNV')) {
+        //         trackConfigs.push({
+        //             name: file.name,
+        //             color: 'rgb(200,0,0)',
+        //             url: file,
+        //             autoscaleGroup: '1',
+        //             graphType: "line",
+        //             indexed: false,
+        //             isLog: true,
+        //             height: 150,
+        //         })
+        //     } else if (file.name.includes('_score')) {
+        //         trackConfigs.push({
+        //             name: file.name,
+        //             color: 'rgb(0,0,200)',
+        //             url: file,
+        //             autoscaleGroup: '1',
+        //             graphType: "points",
+        //             height: 150,
+        //         })
+        //     }
+        //     // url: 'https://www.encodeproject.org/files/ENCFF000ASF/@@download/ENCFF000ASF.bigWig',
+        //     // name: 'GM12878 H3K4me3',
+        //     // color: 'rgb(200,0,0)',
+        //     // autoscaleGroup: '1'
+        //
+        // }
+        
+        
+                trackConfigs.push([
+                    {
+                    name: wigFiles[1].name,
+                    color: 'rgb(200,0,0)',
+                    url: wigFiles[1],
+                    autoscaleGroup: '1',
+                    graphType: "points",
+                    indexed: false,
+                    isLog: true,
+                    height: 150,
+                    noSpinner: true,
+                    sourceType: "file",
+                    format: "wig",
+                    type: "wig",
+                    },
+                    {
+                    name: wigFiles[0].name,
+                    color: 'rgb(200,0,0)',
+                    url: wigFiles[0],
+                    autoscaleGroup: '1',
+                        graphType: "line",
+                    indexed: false,
+                    isLog: true,
+                    height: 150,
+                    noSpinner: true,
+                    sourceType: "file",
+                    format: "wig",
+                    type: "wig",
+                    }
+                ])
+        console.log('shot',trackConfigs)
+        
         if (trackConfigs.length > 0) {
-
             igvBrowser.loadTrackList(trackConfigs);
 
         }

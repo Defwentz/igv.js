@@ -730,12 +730,28 @@ Browser.prototype.loadTrack = async function (config) {
 }
 
 Browser.prototype.createTrack = function (config) {
+    console.warn("create track.config: ", config)
+    if (Array.isArray(config)) {
+        let tracks = []
+        for (let cfg of config) {
+            tracks.push(this.createSingleTrack(cfg))
+        }
+        return {
+            tracks: tracks,
+        }
+    } else {
+        return this.createSingleTrack(config)
+    }
+    
+}
 
+Browser.prototype.createSingleTrack = function (config) {
+
+    // console.warn("config: ", config)
     // Lowercase format
     if (config.format) {
         config.format = config.format.toLowerCase();
     }
-
 
     let type = (undefined === config.type) ? 'unknown_type' : config.type.toLowerCase();
 
@@ -771,7 +787,7 @@ Browser.prototype.createTrack = function (config) {
             track.roi.push(new ROI(r, this.genome));
         }
     }
-
+    // console.warn("mtrack: ", track)
     return track
 
 }

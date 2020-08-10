@@ -133,6 +133,7 @@ WigTrack.prototype.draw = function (options) {
     let lastPixelEnd = -1;
     let lastValue = -1;
     let lastNegValue = 1;
+    let lastPoint;
 
     let baselineColor;
     if (typeof self.color === "string" && self.color.startsWith("rgb(")) {
@@ -204,15 +205,29 @@ WigTrack.prototype.draw = function (options) {
 
         const height = yScale(0) - y;
         const width = getWidth(feature, x);
-
+        
         let c = (feature.value < 0 && self.altColor) ? self.altColor : self.color;
         const color = (typeof c === "function") ? c(feature.value) : c;
 
+        const px = x + width / 2;
         if (self.graphType === "points") {
             const pointSize = self.config.pointSize || 3;
-            const px = x + width / 2;
+            // const px = x + width / 2;
             IGVGraphics.fillCircle(ctx, px, y, pointSize / 2, {"fillStyle": color, "strokeStyle": color});
 
+        } else if (self.graphType === "line") {
+            
+            if (lastPoint != null) {
+                IGVGraphics.strokeLine(ctx, lastPoint.px, lastPoint.y, px, y, { "strokeStyle": color });
+            }
+            lastPoint = { "px": px, "y": y };
+            
+            // const pixelEnd = x + width;
+            // if (pixelEnd > lastPixelEnd || (feature.value >= 0 && feature.value > lastValue) || (feature.value < 0 && feature.value < lastNegValue)) {
+            //     IGVGraphics.fillRect(ctx, x, y, width, height, {fillStyle: color});
+            // }
+            // lastValue = feature.value;
+            // lastPixelEnd = pixelEnd;
         } else {
             const pixelEnd = x + width;
             if (pixelEnd > lastPixelEnd || (feature.value >= 0 && feature.value > lastValue) || (feature.value < 0 && feature.value < lastNegValue)) {

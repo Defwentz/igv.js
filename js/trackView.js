@@ -40,7 +40,7 @@ var dragged,
     dragDestination;
 
 const TrackView = function (browser, $container, track) {
-
+    console.warn("new track created with track:", track)
     var self = this,
         width,
         $track;
