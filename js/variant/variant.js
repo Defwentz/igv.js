@@ -46,17 +46,13 @@ function createVCFVariant(tokens) {
 }
 
 function getInfoObject(infoStr) {
-
-    if (!infoStr) {
-        return undefined;
-    }
-
     var info = {};
-    infoStr.split(';').forEach(function (elem) {
-        var element = elem.split('=');
-        info[element[0]] = element[1];
-    });
-
+    if (infoStr) {
+        infoStr.split(';').forEach(function (elem) {
+            var element = elem.split('=');
+            info[element[0]] = element[1];
+        });
+    }
     return info;
 }
 
@@ -73,9 +69,9 @@ function init(variant) {
         } else if (variant.info["PERIOD"]) {
             variant.type = "STR";
         }
-        else {
-            variant.type = determineType(altBases);
-        }
+    }
+    if (variant.type === undefined) {
+        variant.type = determineType(ref, altBases);
     }
 
 
@@ -90,7 +86,7 @@ function init(variant) {
         variant.start = variant.pos - 1;
         variant.end = Number.parseInt(variant.info["END"]);
 
-    } else {
+    } else if ("NONVARIANT" !== variant.type) {
         const altTokens = altBases.split(",").filter(token => token.length > 0);
         variant.alleles = [];
         variant.start = variant.pos;
@@ -177,12 +173,11 @@ Variant.prototype.popupData = function (genomicLocation, genomeId) {
         {name: "Filter", value: this.filter}
     ];
 
-    if (this.referenceBases.length === 1 && !determineType(this.alternateBases)) {
+    if ("SNP" === this.type) {
         let ref = this.referenceBases;
         if (ref.length === 1) {
             let altArray = this.alternateBases.split(",");
-            for (let i = 0; i < altArray.length; i++) {
-                let alt = this.alternateBases[i];
+            for (let alt of altArray) {
                 if (alt.length === 1) {
                     let l = TrackBase.getCravatLink(this.chr, this.pos, ref, alt, genomeId)
                     if (l) {
@@ -223,21 +218,27 @@ Variant.prototype.isRefBlock = function () {
     return "NONVARIANT" === this.type;
 }
 
-function determineType(altAlleles) {
+function determineType(ref, altAlleles) {
+    const refLength = ref.length;
     if (altAlleles === undefined) {
         return "UNKNOWN";
     } else if (altAlleles.trim().length === 0 ||
         altAlleles === "<NON_REF>" ||
-        altAlleles === "<*>") {
+        altAlleles === "<*>" ||
+        altAlleles === ".") {
         return "NONVARIANT";
     } else {
         const alleles = altAlleles.split(",");
         const types = alleles.map(function (a) {
-            return "<NON_REF>" === a ? "NONVARIANT" : "OTHER";
+            if (refLength === 1 && a.length === 1) {
+                return "SNP";
+            } else {
+                return "<NON_REF>" === a ? "NONVARIANT" : "OTHER";
+            }
         });
         let type = types[0];
-        for(let t of types) {
-            if(t !== type) {
+        for (let t of types) {
+            if (t !== type) {
                 return "MIXED";
             }
         }

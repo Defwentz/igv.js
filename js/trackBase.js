@@ -26,6 +26,7 @@
 import FeatureUtils from "./feature/featureUtils.js";
 import {isFilePath} from './util/fileUtils.js'
 import {isSimpleType} from "./util/igvUtils.js";
+import {numberFormatter, capitalize} from "./util/stringUtils.js";
 
 /**
  * A collection of properties and methods shared by all (or most) track types.   Used as a mixin
@@ -55,6 +56,7 @@ const TrackBase = function (config, browser) {
         if (isFilePath(config.url)) this.name = config.url.name;
         else this.name = config.url;
     }
+    this.id = this.config.id === undefined ? this.name : this.config.id;
 
     this.order = config.order;
 
@@ -160,7 +162,7 @@ TrackBase.prototype.setTrackProperties = function (properties) {
     }
 }
 
-TrackBase.prototype.getVisibilityWindow = function() {
+TrackBase.prototype.getVisibilityWindow = function () {
     return this.visibilityWindow;
 }
 
@@ -171,7 +173,7 @@ TrackBase.prototype.getVisibilityWindow = function() {
  */
 TrackBase.extractPopupData = function (feature, genomeId) {
 
-    const filteredProperties = new Set(['row', 'color']);
+    const filteredProperties = new Set(['row', 'color', 'chr', 'start', 'end', 'cdStart', 'cdEnd', 'strand']);
     const data = [];
 
     let alleles, alleleFreqs;
@@ -181,8 +183,7 @@ TrackBase.extractPopupData = function (feature, genomeId) {
             !filteredProperties.has(property) &&
             isSimpleType(feature[property])) {
             let value = feature[property];
-            if("start" === property) value = value + 1;
-            data.push({name: property, value: value});
+            data.push({name: capitalize(property), value: value});
 
             if (property === "alleles") {
                 alleles = feature[property];
@@ -229,9 +230,21 @@ TrackBase.extractPopupData = function (feature, genomeId) {
         }
     }
 
+    if (feature.attributes) {
+        for (let key of Object.keys(feature.attributes)) {
+            data.push({name: key, value: feature.attributes[key]})
+        }
+    }
+
+    // final chr position
+    let posString = `${feature.chr}:${numberFormatter(feature.start+1)}-${numberFormatter(feature.end)}`
+    if(feature.strand) {
+        posString += ` (${feature.strand})`
+    }
+    data.push('<hr\>');
+    data.push(posString);
 
     return data;
-
 
 }
 
@@ -243,11 +256,12 @@ TrackBase.getCravatLink = function (chr, position, ref, alt, genomeID) {
 
     if ("hg38" === genomeID || "GRCh38" === genomeID) {
 
-        const cravatChr = chr.startsWith("chr") ? chr : "chr" + chr
-
-        return "<a target='_blank' " +
-            "href='https://www.cravat.us/CRAVAT/variant.html?variant=" +
-            cravatChr + "_" + position + "_+_" + ref + "_" + alt + "'>Cravat " + ref + "->" + alt + "</a>"
+        const cravatChr = chr.startsWith("chr") ? chr : "chr" + chr;
+        return `<a target="_blank" href="https://run.opencravat.org/result/nocache/variant.html` +
+            `?chrom=${cravatChr}&pos=${position}&ref_base=${ref}&alt_base=${alt}">Cravat ${ref}->${alt}</a>`
+        // return "<a target='_blank' " +
+        //     "href='https://www.cravat.us/CRAVAT/variant.html?variant=" +
+        //     cravatChr + "_" + position + "_+_" + ref + "_" + alt + "'>Cravat " + ref + "->" + alt + "</a>"
     } else {
         return undefined
     }

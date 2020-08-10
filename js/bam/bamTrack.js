@@ -60,6 +60,9 @@ const BAMTrack = extend(TrackBase,
         if (config.coverageTrackHeight === undefined) {
             config.coverageTrackHeight = DEFAULT_COVERAGE_TRACK_HEIGHT;
         }
+        if(config.alleleFreqThreshold === undefined) {
+            config.alleleFreqThreshold = 0.2;
+        }
 
         this.featureSource = new BamSource(config, browser);
         this.coverageTrack = new CoverageTrack(config, this);
@@ -67,9 +70,10 @@ const BAMTrack = extend(TrackBase,
 
         this.visibilityWindow = config.visibilityWindow || 30000;
         this.viewAsPairs = config.viewAsPairs;
-        this.pairsSupported = (undefined === config.pairsSupported);
+        this.pairsSupported = config.pairsSupported !== false;
         this.showSoftClips = config.showSoftClips;
         this.showAllBases = config.showAllBases;
+        this.showMismatches = config.showMismatches !== false;
         this.color = config.color || DEFAULT_ALIGNMENT_COLOR;
         this.coverageColor = config.coverageColor || DEFAULT_COVERAGE_COLOR;
         this.minFragmentLength = config.minFragmentLength;   // Optional, might be undefined
@@ -93,6 +97,7 @@ const BAMTrack = extend(TrackBase,
         function assignSort(currentSorts, sort) {
 
             const range = parseLocusString(sort.locus);
+            if(browser && browser.genome) range.chr = browser.genome.getChromosomeName(range.chr);
 
             // Loop through current genomic states, assign sort to first matching state
             for (let gs of browser.genomicStateList) {
@@ -411,15 +416,12 @@ BAMTrack.prototype.getState = function () {
 }
 
 var CoverageTrack = function (config, parent) {
-
     this.parent = parent;
     this.featureSource = parent.featureSource;
-    this.top = 0;
-
-
     this.height = config.coverageTrackHeight;
     this.dataRange = {min: 0};   // Leav max undefined
     this.paintAxis = paintAxis;
+    this.top = 0;
 };
 
 CoverageTrack.prototype.computePixelHeight = function (alignmentContainer) {
@@ -428,13 +430,14 @@ CoverageTrack.prototype.computePixelHeight = function (alignmentContainer) {
 
 CoverageTrack.prototype.draw = function (options) {
 
-    const ctx = options.context;
-    if (this.top) {
-        ctx.translate(0, top);
-    }
-    const yTop = options.top || 0
-    const yBottom = yTop + options.pixelHeight
+    const pixelTop = options.pixelTop;
+    const pixelBottom = pixelTop + options.pixelHeight;
 
+    if(pixelTop > this.height) {
+        return; //scrolled out of view
+    }
+
+    const ctx = options.context;
     const alignmentContainer = options.features;
     const coverageMap = alignmentContainer.coverageMap;
     this.dataRange.max = coverageMap.maximum;
@@ -630,18 +633,19 @@ AlignmentTrack.prototype.draw = function (options) {
     const packedAlignmentRows = alignmentContainer.packedAlignmentRows
     const showSoftClips = this.parent.showSoftClips;
     const showAllBases = this.parent.showAllBases;
-    const yTop = options.top || 0
-    const yBottom = yTop + options.pixelHeight
 
     let referenceSequence = alignmentContainer.sequence;
     if (referenceSequence) {
         referenceSequence = referenceSequence.toUpperCase();
     }
-
     let alignmentRowYInset = 0;
 
+    let pixelTop = options.pixelTop;
     ctx.save();
-    if (this.top) ctx.translate(0, this.top);
+    if (this.top) {
+        ctx.translate(0, this.top);
+    }
+    const pixelBottom = pixelTop + options.pixelHeight;
 
     if (alignmentContainer.hasDownsampledIntervals()) {
         alignmentRowYInset = downsampleRowHeight + alignmentStartGap;
@@ -673,6 +677,12 @@ AlignmentTrack.prototype.draw = function (options) {
             const alignmentRow = packedAlignmentRows[rowIndex];
             const alignmentY = alignmentRowYInset + (this.alignmentRowHeight * rowIndex);
             const alignmentHeight = this.alignmentRowHeight <= 4 ? this.alignmentRowHeight : this.alignmentRowHeight - 2;
+
+            if(alignmentY > pixelBottom) {
+                break;
+            } else if(alignmentY + alignmentHeight < pixelTop) {
+                continue;
+            }
 
             for (let alignment of alignmentRow.alignments) {
 
@@ -784,7 +794,6 @@ AlignmentTrack.prototype.draw = function (options) {
                 const ePixel = ((gap.start + gap.len) - bpStart) / bpPerPixel;
                 const color = ("D" === gap.type) ? this.deletionColor : this.skippedColor;
                 IGVGraphics.strokeLine(ctx, sPixel, yStrokedLine, ePixel, yStrokedLine, {strokeStyle: color});
-
             }
         }
 
@@ -872,7 +881,7 @@ AlignmentTrack.prototype.draw = function (options) {
 
             // Mismatch coloring
 
-            if (isSoftClip || showAllBases || (referenceSequence && alignment.seq && alignment.seq !== "*")) {
+            if (this.parent.showMismatches && (isSoftClip || showAllBases || (referenceSequence && alignment.seq && alignment.seq !== "*"))) {
 
                 const seq = alignment.seq ? alignment.seq.toUpperCase() : undefined;
                 const qual = alignment.qual;
@@ -973,6 +982,7 @@ AlignmentTrack.prototype.contextMenuItemList = function (clickState) {
     list.push({label: '&nbsp; base', click: () => sortByOption("NUCLEOTIDE")});
     list.push({label: '&nbsp; read strand', click: () => sortByOption("STRAND")});
     list.push({label: '&nbsp; insert size', click: () => sortByOption("INSERT_SIZE")});
+    list.push({label: '&nbsp; gap size', click: () => sortByOption("GAP_SIZE")});
     list.push({label: '&nbsp; chromosome of mate', click: () => sortByOption("MATE_CHR")});
     list.push({label: '&nbsp; mapping quality', click: () => sortByOption("MQ")});
     list.push({label: '&nbsp; tag', click: sortByTag});

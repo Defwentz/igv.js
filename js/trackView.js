@@ -23,18 +23,16 @@
  * THE SOFTWARE.
  */
 
+import { ColorPicker } from '../node_modules/igv-ui/dist/igv-ui.js';
 import $ from "./vendor/jquery-3.3.1.slim.js";
 import ViewPort from "./viewport.js";
 import FeatureUtils from "./feature/featureUtils.js";
 import RulerTrack from "./rulerTrack.js";
 import TrackGearPopover from "./ui/trackGearPopover.js";
-import GenericContainer from "./ui/genericContainer.js";
 import MenuUtils from "./ui/menuUtils.js";
 import {createIcon} from "./igv-icons.js";
 import {guid, pageCoordinates} from "./util/domUtils.js";
 import {doAutoscale} from "./util/igvUtils.js";
-import {createColorSwatchSelector} from "./ui/ui-utils.js"
-
 
 var dragged,
     dragDestination;
@@ -89,7 +87,7 @@ const TrackView = function (browser, $container, track) {
     if (true === this.track.ignoreTrackMenu) {
         // do nothing
     } else {
-        this.appendRightHandGutter( $(this.trackDiv));
+        this.appendRightHandGutter($(this.trackDiv));
     }
 
     if (this.track instanceof RulerTrack) {
@@ -173,7 +171,7 @@ TrackView.prototype.decorateViewports = function () {
 
 };
 
-TrackView.prototype.appendLeftHandGutter = function($parent) {
+TrackView.prototype.appendLeftHandGutter = function ($parent) {
 
     var self = this,
         $leftHandGutter,
@@ -195,7 +193,7 @@ TrackView.prototype.appendLeftHandGutter = function($parent) {
             $leftHandGutter.addClass('igv-clickable');
         }
 
-        $canvas = $('<canvas class ="igv-track-control-canvas">');
+        $canvas = $('<canvas class ="igv-canvas">');
         $leftHandGutter.append($canvas);
         this.controlCanvas = $canvas.get(0);
         resizeControlCanvas.call(this, $leftHandGutter.outerWidth(), $leftHandGutter.outerHeight())
@@ -204,14 +202,14 @@ TrackView.prototype.appendLeftHandGutter = function($parent) {
 
 }
 
-TrackView.prototype.appendRightHandGutter = function($parent) {
+TrackView.prototype.appendRightHandGutter = function ($parent) {
     let $div = $('<div class="igv-right-hand-gutter">');
     $parent.append($div);
     createTrackGearPopover.call(this, $div);
 }
 
 // Free function for juicebox -- do not attach to prototype!!!
-function createTrackGearPopover ($parent) {
+function createTrackGearPopover($parent) {
 
     let $cogContainer = $("<div>", {class: 'igv-trackgear-container'});
     $parent.append($cogContainer);
@@ -240,7 +238,7 @@ function resizeControlCanvas(width, height) {
             $(this.controlCanvas).remove();
         }
 
-        var $canvas = $('<canvas class ="igv-track-control-canvas">');
+        var $canvas = $('<canvas class ="igv-canvas">');
         this.controlCanvas = $canvas[0];
         $(this.leftHandGutter).append($canvas);
 
@@ -318,7 +316,11 @@ TrackView.prototype.setDataRange = function (min, max, autoscale) {
     this.track.autoscale = autoscale;
     this.track.config.autoScale = autoscale;
 
-    this.repaintViews();
+    if (autoscale) {
+        this.updateViews();
+    } else {
+        this.repaintViews();
+    }
 };
 
 TrackView.prototype.setColor = function (color) {
@@ -329,33 +331,23 @@ TrackView.prototype.setColor = function (color) {
 
 TrackView.prototype.createColorPicker = function () {
 
-    let self = this;
-
     const config =
         {
-            $parent: $(this.trackDiv),
-
-            width: 384,
-
+            parent: this.trackDiv,
+            top: undefined,
+            left: undefined,
+            width: undefined,
             height: undefined,
-            closeHandler: () => {
-                self.colorPicker.$container.hide();
-            }
+            defaultColor: this.track.color,
+            colorHandler: rgb => this.setColor(rgb)
         };
 
-    this.colorPicker = new GenericContainer(config);
-
-    createColorSwatchSelector(this.colorPicker.$container, rgb => this.setColor(rgb), this.track.color);
-
-    self.colorPicker.$container.hide();
+    this.colorPicker = new ColorPicker(config);
 
 };
 
 TrackView.prototype.presentColorPicker = function () {
-    const bbox = this.trackDiv.getBoundingClientRect();
-    this.colorPicker.origin = {x: bbox.x, y: 0};
-    this.colorPicker.$container.offset({left: this.colorPicker.origin.x, top: this.colorPicker.origin.y});
-    this.colorPicker.$container.show();
+    this.colorPicker.show();
 };
 
 TrackView.prototype.setTrackHeight = function (newHeight, update, force) {
@@ -456,34 +448,35 @@ TrackView.prototype.updateViews = async function (force) {
 
     const visibleViewports = this.viewports.filter(vp => vp.isVisible())
 
+    // Shift viewports left/right to current genomic state (pans canvas)
     visibleViewports.forEach(function (viewport) {
         viewport.shift();
     });
 
-    // List of viewports that need reloading
+    // rpv: viewports whose image (canvas) does not fully cover current genomic range
     const rpV = viewportsToReload.call(this, force);
+
+    // Trigger viewport to load features needed to cover current genomic range
     for (let vp of rpV) {
         await vp.loadFeatures()
-        if (vp.tile && vp.tile.features && vp.tile.features.length === 0 && 'all' === vp.genomicState.referenceFrame.chrName) {
-            vp.checkZoomIn();
-        }
+        // if (vp.tile && vp.tile.features && vp.tile.features.length === 0 && 'all' === vp.genomicState.referenceFrame.chrName) {
+        //     vp.checkZoomIn();
+        // }
     }
 
-    const dragObject = this.browser.dragObject;
+    if(this.disposed) return;   // Track was removed during load
 
-    if (!dragObject && this.track.autoscale) {
+    const isDragging = this.browser.dragObject;
+    if (!isDragging && this.track.autoscale) {
         let allFeatures = [];
         for (let vp of visibleViewports) {
             const referenceFrame = vp.genomicState.referenceFrame;
             const start = referenceFrame.start;
             const end = start + referenceFrame.toBP($(vp.contentDiv).width());
-
             if (vp.tile && vp.tile.features) {
                 allFeatures = allFeatures.concat(FeatureUtils.findOverlapping(vp.tile.features, start, end));
-
             }
         }
-
         if (typeof this.track.doAutoscale === 'function') {
             this.track.dataRange = this.track.doAutoscale(allFeatures);
         } else {
@@ -493,7 +486,7 @@ TrackView.prototype.updateViews = async function (force) {
 
 
     // Must repaint all viewports if autoscaling
-    if (!dragObject && (this.track.autoscale || this.track.autoscaleGroup)) {
+    if (!isDragging && (this.track.autoscale || this.track.autoscaleGroup)) {
         for (let vp of visibleViewports) {
             vp.repaint();
         }
@@ -539,16 +532,14 @@ TrackView.prototype.getInViewFeatures = async function (force) {
 
 function viewportsToReload(force) {
 
-
     // List of viewports that need reloading
     const rpV = this.viewports.filter(function (viewport) {
         if (!viewport.isVisible()) {
-            return false
+            return false;
         }
         if (!viewport.checkZoomIn()) {
-            return false
+            return false;
         } else {
-
             const referenceFrame = viewport.genomicState.referenceFrame;
             const chr = referenceFrame.chrName;
             const start = referenceFrame.start;
@@ -557,9 +548,7 @@ function viewportsToReload(force) {
             return force || (!viewport.tile || viewport.tile.invalidate || !viewport.tile.containsRange(chr, start, end, bpPerPixel));
         }
     });
-
     return rpV;
-
 }
 
 TrackView.prototype.checkContentHeight = function () {
@@ -615,10 +604,6 @@ TrackView.prototype.dispose = function () {
         this.$trackManipulationHandle.off();
     }
 
-    if (this.$innerScroll) {
-        this.$innerScroll.off();
-    }
-
     if (this.scrollbar) {
         this.scrollbar.dispose();
     }
@@ -654,6 +639,7 @@ TrackView.prototype.dispose = function () {
         self[key] = undefined;
     })
 
+    this.disposed = true;
 };
 
 
@@ -670,8 +656,7 @@ const TrackScrollbar = function ($viewportContainer, viewports, rootDiv) {
     const namespace = '.trackscrollbar' + guid();
     this.namespace = namespace;
 
-    const $outerScroll = $('<div class="igv-scrollbar-outer-div">');
-    this.$outerScroll = $outerScroll;
+    this.$outerScroll = $('<div class="igv-scrollbar-outer-div">');
     this.$innerScroll = $('<div>');
 
     this.$outerScroll.append(this.$innerScroll);
@@ -752,6 +737,7 @@ TrackScrollbar.prototype.moveScrollerTo = function (y) {
 
 TrackScrollbar.prototype.dispose = function () {
     $(window).off(this.namespace);
+    this.$innerScroll.off();
 };
 
 TrackScrollbar.prototype.update = function () {

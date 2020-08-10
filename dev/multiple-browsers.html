@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns="http://www.w3.org/1999/html">
 <head>
     <meta charset="utf-8">
     <meta content="IE=edge" http-equiv="X-UA-Compatible">
     <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
     <meta content="" name="description">
     <meta content="" name="author">
-    <link href=../img/favicon.ico rel="shortcut icon">
+    <link href=img/favicon.ico rel="shortcut icon">
     <title>IGV - Dev</title>
 
     <!-- IGV CSS -->
@@ -34,10 +34,14 @@
     </div>
 </div>
 
+<div><p>
+    <button  type="button" id="removeBrowsersButton" >Remove all browsers </button>
+</p></div>
+
 
 <script type="module">
 
-    import igv from "../js/api.js";
+    import igv from "../js/index.js";
 
     const config_a =
         {
@@ -84,6 +88,10 @@
         .then(function (b) {
             console.log("Created browser guid: " + b.guid);
         });
+
+    document.getElementById("removeBrowsersButton").onclick = function () {
+        igv.removeAllBrowsers();
+    }
 
 
 </script>

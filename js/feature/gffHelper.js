@@ -24,6 +24,8 @@
  * THE SOFTWARE.
  */
 
+import {numberFormatter} from "../util/stringUtils.js"
+
 /**
  * Created by jrobinson on 4/7/16.
  */
@@ -33,193 +35,267 @@ const cdsTypes = new Set(['CDS', 'cds']);
 const codonTypes = new Set(['start_codon', 'stop_codon']);
 const utrTypes = new Set(['5UTR', '3UTR', 'UTR', 'five_prime_UTR', 'three_prime_UTR', "3'-UTR", "5'-UTR"]);
 const exonTypes = new Set(['exon', 'coding-exon']);
-
-const GFFHelper = function (options) {
-    this.format = options.format;
-    if (options.filterTypes) {
-        this.filterTypes = new Set(options.filterTypes)
+const intronType = 'intron';
+const DEFAULT_NAME_FIELDS = ["name", "alias", "id", "gene", "locus", "gene_name"];   // lowercased, from IGV desktop
+const transcriptModelTypes = new Set();
+for (let cltn of [transcriptTypes, cdsTypes, codonTypes, utrTypes, exonTypes]) {
+    for (let t of cltn) {
+        transcriptModelTypes.add(t);
     }
 }
 
-GFFHelper.prototype.combineFeatures = function (features) {
 
-    if ("gff3" === this.format) {
-        return combineFeaturesGFF.call(this, features);
-    } else {
-        return combineFeaturesGTF.call(this, features);
-    }
-}
-
-function combineFeaturesGTF(features) {
-
-    const transcripts = Object.create(null)
-    const combinedFeatures = []
-    const consumedFeatures = new Set();
-    const filterTypes = this.filterTypes;
-
-    features = features.filter(f => filterTypes === undefined || !filterTypes.has(f.type))
-
-    // 1. Build dictionary of transcripts
-    for (let f of features) {
-        if (transcriptTypes.has(f.type)) {
-            const transcriptId = f.id
-            if (undefined !== transcriptId) {
-                const gffTranscript = new GFFTranscript(f);
-                transcripts[transcriptId] = gffTranscript;
-                combinedFeatures.push(gffTranscript);
-                consumedFeatures.add(f)
-            }
+class GFFHelper {
+    constructor(options) {
+        this.format = options.format;
+        if (options.filterTypes) {
+            this.filterTypes = new Set(options.filterTypes)
         }
     }
 
-    // Add exons
-    for (let f of features) {
-        if (exonTypes.has(f.type)) {
-            const id = f.id;   // transcript_id,  GTF groups all features with the same ID, does not have a parent/child hierarchy
-            if (id) {
-                let transcript = transcripts[id];
-                if (transcript === undefined) {
-                    transcript = new GFFTranscript(f);    // GTF does not require an explicit transcript record
-                    transcripts[id] = transcript;
-                    combinedFeatures.push(transcript);
-                }
-                transcript.addExon(f);
-                consumedFeatures.add(f)
-            }
-        }
-    }
-
-    // Apply CDS and UTR
-    for (let f of features) {
-        if (cdsTypes.has(f.type) || utrTypes.has(f.type) || codonTypes.has(f.type)) {
-            const id = f.id;
-            if (id) {
-                let transcript = transcripts[id];
-                if (transcript === undefined) {
-                    transcript = new GFFTranscript(f);
-                    transcripts[id] = transcript;
-                    combinedFeatures.push(transcript);
-                }
-                if (utrTypes.has(f.type)) {
-                    transcript.addUTR(f);
-                } else if (cdsTypes.has(f.type)) {
-                    transcript.addCDS(f);
-                } else if (codonTypes.has(f.type)) {
-                    // Ignore for now
-                }
-                consumedFeatures.add(f)
-            }
-        }
-    }
-
-    // Finish transcripts
-    for (let f of combinedFeatures) {
-        if (typeof f.finish === "function") {
-            f.finish();
-        }
-    }
-
-    // Add other features
-    const others = features.filter(f => !consumedFeatures.has(f))
-    for (let f of others) {
-        combinedFeatures.push(f);
-    }
-
-    combinedFeatures.sort(function (a, b) {
-        return a.start - b.start;
-    })
-
-    return combinedFeatures;
-
-}
-
-function combineFeaturesGFF(features) {
-
-    // 1. Build dictionary of transcripts
-    const transcripts = Object.create(null)
-    const combinedFeatures = []
-    const consumedFeatures = new Set();
-    const filterTypes = this.filterTypes;
-
-    features = features.filter(f => filterTypes === undefined || !filterTypes.has(f.type))
-
-    for (let f of features) {
-        if (transcriptTypes.has(f.type)) {
-            const transcriptId = f.id; // getAttribute(f.attributeString, "transcript_id", /\s+/);
-            if (undefined !== transcriptId) {
-                const gffTranscript = new GFFTranscript(f);
-                transcripts[transcriptId] = gffTranscript;
-                combinedFeatures.push(gffTranscript);
-                consumedFeatures.add(f)
-            }
-        }
-    }
-
-    // Add exons
-    for (let f of features) {
-        if (exonTypes.has(f.type)) {
-            const parents = getParents(f);
-            if (parents) {
-                for (let id of parents) {
-                    let transcript = transcripts[id];
-                    if (transcript !== undefined) {
-                        transcript.addExon(f);
-                        consumedFeatures.add(f)
-                    }
-                }
-            }
-        }
-    }
-
-    // Apply CDS and UTR
-    for (let f of features) {
-        if (cdsTypes.has(f.type) || utrTypes.has(f.type) || codonTypes.has(f.type)) {
-            const parents = getParents(f);
-            if (parents) {
-                for (let id of parents) {
-                    let transcript = transcripts[id];
-                    if (transcript !== undefined) {
-                        if (utrTypes.has(f.type)) {
-                            transcript.addUTR(f);
-                        } else if (cdsTypes.has(f.type)) {
-                            transcript.addCDS(f);
-                        } else if (codonTypes.has(f.type)) {
-                            // Ignore for now
-                        }
-                        consumedFeatures.add(f);
-                    }
-                }
-            }
-        }
-    }
-
-    // Finish transcripts
-    combinedFeatures.forEach(function (f) {
-        if (typeof f.finish === "function") {
-            f.finish();
-        }
-    })
-
-    // Add other features
-    const others = features.filter(f => !consumedFeatures.has(f))
-    for (let f of others) {
-        combinedFeatures.push(f);
-    }
-
-    combinedFeatures.sort(function (a, b) {
-        return a.start - b.start;
-    })
-
-    return combinedFeatures;
-
-    function getParents(f) {
-        if (f.parent && f.parent.trim() !== "") {
-            return f.parent.trim().split(",");
+    combineFeatures(features) {
+        let combinedFeatures;
+        if ("gff3" === this.format) {
+            const tmp = this.combineFeaturesById(features);
+            combinedFeatures = this.combineFeaturesGFF(tmp);
         } else {
-            return null;
+            combinedFeatures = this.combineFeaturesGTF(features);
         }
+        combinedFeatures.sort(function (a, b) {
+            return a.start - b.start;
+        })
+        return combinedFeatures;
     }
 
+    combineFeaturesById(features) {
+        const combinedFeatures = [];
+        const chrIdHash = {};
+        for (let f of features) {
+            if (f.id === undefined) {
+                combinedFeatures.push(f);
+            } else {
+                let idHash = chrIdHash[f.chr];
+                if (!idHash) {
+                    idHash = {};
+                    chrIdHash[f.chr] = idHash;
+                }
+                if (idHash.hasOwnProperty(f.id)) {
+                    const sf = idHash[f.id];
+                    if (sf.hasOwnProperty("exons")) {
+                        sf.start = Math.min(sf.start, f.start);
+                        sf.end = Math.max(sf.end, f.end);
+                        sf.exons.push(f);
+                    } else {
+                        const cf = {
+                            id: f.id,
+                            type: f.type,
+                            chr: f.chr,
+                            strand: f.strand,
+                            start: Math.min(f.start, sf.start),
+                            end: Math.max(f.end, sf.end),
+                            exons: [sf, f]
+                        };
+                        if (f.parent && f.parent.trim() !== "") {
+                            cf.parent = f.parent;
+                        }
+                        idHash[f.id] = cf;
+                    }
+                } else {
+                    idHash[f.id] = f;
+                }
+            }
+        }
+        for (let key of Object.keys(chrIdHash)) {
+            const idHash = chrIdHash[key];
+            for (let id of Object.keys(idHash)) {
+                combinedFeatures.push(idHash[id])
+            }
+        }
+        return combinedFeatures;
+    }
+
+    combineFeaturesGTF(features) {
+
+        const transcripts = Object.create(null)
+        const combinedFeatures = []
+        const consumedFeatures = new Set();
+        const filterTypes = this.filterTypes;
+
+        features = features.filter(f => filterTypes === undefined || !filterTypes.has(f.type))
+
+        // 1. Build dictionary of transcripts
+        for (let f of features) {
+            if (transcriptTypes.has(f.type)) {
+                const transcriptId = f.id
+                if (undefined !== transcriptId) {
+                    const gffTranscript = new GFFTranscript(f);
+                    transcripts[transcriptId] = gffTranscript;
+                    combinedFeatures.push(gffTranscript);
+                    consumedFeatures.add(f)
+                }
+            }
+        }
+
+        // Add exons
+        for (let f of features) {
+            if (exonTypes.has(f.type)) {
+                const id = f.id;   // transcript_id,  GTF groups all features with the same ID, does not have a parent/child hierarchy
+                if (id) {
+                    let transcript = transcripts[id];
+                    if (transcript === undefined) {
+                        transcript = new GFFTranscript(f);    // GTF does not require an explicit transcript record
+                        transcripts[id] = transcript;
+                        combinedFeatures.push(transcript);
+                    }
+                    transcript.addExon(f);
+                    consumedFeatures.add(f)
+                }
+            }
+        }
+
+        // Apply CDS and UTR
+        for (let f of features) {
+            if (cdsTypes.has(f.type) || utrTypes.has(f.type) || codonTypes.has(f.type)) {
+                const id = f.id;
+                if (id) {
+                    let transcript = transcripts[id];
+                    if (transcript === undefined) {
+                        transcript = new GFFTranscript(f);
+                        transcripts[id] = transcript;
+                        combinedFeatures.push(transcript);
+                    }
+                    if (utrTypes.has(f.type)) {
+                        transcript.addUTR(f);
+                    } else if (cdsTypes.has(f.type)) {
+                        transcript.addCDS(f);
+                    } else if (codonTypes.has(f.type)) {
+                        // Ignore for now
+                    }
+                    consumedFeatures.add(f)
+                }
+            }
+        }
+
+        // Finish transcripts
+        for (let f of combinedFeatures) {
+            if (typeof f.finish === "function") {
+                f.finish();
+            }
+        }
+
+        // Add other features
+        const others = features.filter(f => !consumedFeatures.has(f))
+        for (let f of others) {
+            combinedFeatures.push(f);
+        }
+
+        return combinedFeatures;
+
+    }
+
+    combineFeaturesGFF(features) {
+
+        // Build dictionary of genes (optional)
+        const genes = features.filter(f => "gene" === f.type);
+        const geneMap = Object.create(null);
+        for (let g of genes) {
+            geneMap[g.id] = g;
+        }
+
+        // 1. Build dictionary of transcripts
+        const transcripts = Object.create(null)
+        const combinedFeatures = []
+        const consumedFeatures = new Set();
+        const filterTypes = this.filterTypes;
+
+        features = features.filter(f => filterTypes === undefined || !filterTypes.has(f.type))
+
+        for (let f of features) {
+            if (transcriptTypes.has(f.type)) {
+                const transcriptId = f.id; // getAttribute(f.attributeString, "transcript_id", /\s+/);
+                if (undefined !== transcriptId) {
+                    const gffTranscript = new GFFTranscript(f);
+                    transcripts[transcriptId] = gffTranscript;
+                    combinedFeatures.push(gffTranscript);
+                    consumedFeatures.add(f);
+                    gffTranscript.gene = geneMap[f.parent];
+                }
+            }
+        }
+
+        // Add exons
+        for (let f of features) {
+            if (exonTypes.has(f.type)) {
+                const parents = getParents(f);
+                if (parents) {
+                    for (let id of parents) {
+                        let transcript = transcripts[id];
+                        if (transcript !== undefined) {
+                            transcript.addExon(f);
+                            consumedFeatures.add(f)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Apply CDS and UTR
+        for (let f of features) {
+            if (cdsTypes.has(f.type) || utrTypes.has(f.type) || codonTypes.has(f.type)) {
+                const parents = getParents(f);
+                if (parents) {
+                    for (let id of parents) {
+                        let transcript = transcripts[id];
+                        if (transcript !== undefined) {
+                            if (utrTypes.has(f.type)) {
+                                transcript.addUTR(f);
+                            } else if (cdsTypes.has(f.type)) {
+                                transcript.addCDS(f);
+                            } else if (codonTypes.has(f.type)) {
+                                // Ignore for now
+                            }
+                            consumedFeatures.add(f);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Introns are ignored, but are consumed
+        const introns = features.filter(f => intronType === f.type);
+        for (let i of introns) {
+            const parents = getParents(i);
+            for (let id of parents) {
+                if (transcripts[id]) {
+                    consumedFeatures.add(i);
+                    break;
+                }
+            }
+        }
+
+        // Finish transcripts
+        combinedFeatures.forEach(function (f) {
+            if (typeof f.finish === "function") {
+                f.finish();
+            }
+        })
+
+        // Add other features
+        const others = features.filter(f => !consumedFeatures.has(f))
+        for (let f of others) {
+            combinedFeatures.push(f);
+        }
+
+        return combinedFeatures;
+
+        function getParents(f) {
+            if (f.parent && f.parent.trim() !== "") {
+                return f.parent.trim().split(",");
+            } else {
+                return null;
+            }
+        }
+    }
 }
 
 var GFFTranscript = function (feature) {
@@ -325,21 +401,30 @@ GFFTranscript.prototype.finish = function () {
             if (exon.end < cdStart || exon.start > cdEnd) exon.utr = true;
         });
     }
-
 }
 
 GFFTranscript.prototype.popupData = function (genomicLocation) {
 
     const kvs = this.attributeString.split(';')
     const pd = []
-    pd.push({name: 'type', value: this.type})
-    pd.push({name: 'start', value: this.start + 1})
-    pd.push({name: 'end', value: this.end})
 
+    // If feature has an associated gene list its attributes first
+    if (this.gene && typeof this.gene.popupData === 'function') {
+        const gd = this.gene.popupData(genomicLocation);
+        for (let e of gd) {
+            pd.push(e);
+        }
+        pd.push("<hr>");
+    }
+    if (this.name) {
+        pd.push({name: 'name', value: this.name})
+    }
+    pd.push({name: 'type', value: this.type})
     for (let kv of kvs) {
         var t = kv.trim().split(this.delim, 2);
         if (t.length === 2 && t[1] !== undefined) {
             const key = t[0].trim();
+            if ('name' === key.toLowerCase()) continue;
             let value = t[1].trim();
             //Strip off quotes, if any
             if (value.startsWith('"') && value.endsWith('"')) {
@@ -348,10 +433,12 @@ GFFTranscript.prototype.popupData = function (genomicLocation) {
             pd.push({name: key, value: value});
         }
     }
+    pd.push({name: 'position', value: `${this.chr}:${numberFormatter(this.start + 1)}-${numberFormatter(this.end)}`})
+
 
     // If clicked over an exon add its attributes
     for (let exon of this.exons) {
-        if (genomicLocation >= exon.start && genomicLocation < exon.end) {
+        if (genomicLocation >= exon.start && genomicLocation < exon.end && typeof exon.popupData === 'function') {
             pd.push("<hr>")
             const exonData = exon.popupData(genomicLocation)
             for (let att of exonData) {
@@ -367,7 +454,6 @@ GFFTranscript.prototype.popupData = function (genomicLocation) {
                     }
                 }
             }
-
         }
     }
 

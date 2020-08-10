@@ -6,13 +6,10 @@
     <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
     <meta content="" name="description">
     <meta content="" name="author">
-    <link href=../img/favicon.ico rel="shortcut icon">
+    <link href=img/favicon.ico rel="shortcut icon">
     <title>IGV - Dev</title>
 
-    <!-- IGV CSS -->
-    <link href="css/dev.css" rel="stylesheet" type="text/css"/>
-
-
+    <link href="css/dev.css" rel="stylesheet"/>
 </head>
 
 <body>
@@ -31,49 +28,48 @@
 
 <script type="module">
 
-    import igv from "../js/api.js";
-    import google from "../js/google/googleUtils.js";
+    import igv from '../js/index.js'
+    import google from "../js/google/googleUtils.js"
+    import { Alert } from '../node_modules/igv-ui/dist/igv-ui.js';
 
-    let browser;
-    google.loadGoogleProperties("https://s3.amazonaws.com/igv.org.app/web_client_google")
+    Alert.init(document.getElementById('igvDiv'))
 
-        .then(function (google) {
+    let browser
+    (async () => {
 
-            const options =
-                {
-                    genome: "hg19",
-                     // locus: [ 'egfr', 'myc' ],
-                    locus: "myc",
-                    flanking: 1000,
-                    queryParametersSupported: true,
-                    showAllChromosomes: true,
-                    showCursorTrackingGuide: true,
-                    showControls: true,
-                    // tracks:
-                    // [
-                    //     {
-                    //         name: "BED Render Bug",
-                    //         url: 'https://www.encodeproject.org/files/ENCFF768ZWJ/@@download/ENCFF768ZWJ.bigBed'
-                    //     }
-                    //
-                    // ]
+        await google.loadGoogleProperties("https://s3.amazonaws.com/igv.org.app/web_client_google")
 
+        const options =
+            {
+                genome: "hg19",
+                // locus: [ 'egfr', 'myc' ],
+                locus: "myc",
+                flanking: 1000,
+                queryParametersSupported: true,
+                showAllChromosomes: true,
+                showCursorTrackingGuide: true,
+                showControls: true,
+                // tracks:
+                // [
+                //     {
+                //         name: "BED Render Bug",
+                //         url: 'https://www.encodeproject.org/files/ENCFF768ZWJ/@@download/ENCFF768ZWJ.bigBed'
+                //     }
+                //
+                // ]
 
-                };
+            };
 
-            igv.createBrowser(document.getElementById('igvDiv'), options)
-                .then(function (b) {
-                    browser = b;
+        browser = await igv.createBrowser(document.getElementById('igvDiv'), options)
 
-                    createTrackList(document.getElementById('trackList'), 'testTracks.json', browser);
-                    return browser;
-                })
+        await createTrackList(document.getElementById('trackList'), 'testTracks.json', browser)
 
-        })
+        const str = [ 0, 1, 2, 3, 4, 5, 6, 7 ].map(digit => `ERROR ${ digit }. That was a bad thing.`).join('<br>')
+        Alert.presentAlert(str)
 
+    })()
 
     function createTrackList(div, file, browser) {
-
 
         return igv.xhr.loadJson(file)
 

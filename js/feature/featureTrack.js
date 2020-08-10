@@ -60,13 +60,7 @@ const FeatureTrack = extend(TrackBase,
         this.maxRows = config.maxRows;
         this.displayMode = config.displayMode || "EXPANDED";    // COLLAPSED | EXPANDED | SQUISHED
         this.labelDisplayMode = config.labelDisplayMode;
-
-        const format = config.format ? config.format.toLowerCase() : undefined;
-        if ('bigwig' === format || 'bigbed' === format) {
-            this.featureSource = new BWSource(config, browser.genome);
-        } else {
-            this.featureSource = new FeatureSource(config, browser.genome);
-        }
+            this.featureSource =  FeatureSource(config, browser.genome);
 
         // Set default heights
         this.autoHeight = config.autoHeight;
@@ -127,7 +121,8 @@ FeatureTrack.prototype.postInit = async function () {
     if (header) this.setTrackProperties(header)
 
     const format = this.config.format;
-    if (format && format.toLowerCase() === 'bigbed' &&
+    if (format &&
+        (format.toLowerCase() === 'bigbed' || format && format.toLowerCase() === 'biginteract') &&
         this.visibilityWindow === undefined &&
         typeof this.featureSource.defaultVisibilityWindow === 'function') {
         this.visibilityWindow = await this.featureSource.defaultVisibilityWindow()
@@ -212,7 +207,7 @@ FeatureTrack.prototype.draw = function (options) {
             } else {
                 rowFeatureCount[row]++;
             }
-            options.rowLastX[row] = -Number.MAX_VALUE;
+            options.rowLastX[row] = -Number.MAX_SAFE_INTEGER;
         }
 
         let lastPxEnd = [];
@@ -282,7 +277,9 @@ FeatureTrack.prototype.popupData = function (clickState, features) {
     const data = [];
     for (let feature of features) {
 
-        const featureData = (typeof feature.popupData === "function") ? feature.popupData(genomicLocation) : TrackBase.extractPopupData(feature, this.getGenomeId());
+        const featureData = (typeof feature.popupData === "function") ?
+            feature.popupData(genomicLocation) :
+            TrackBase.extractPopupData(feature, this.getGenomeId());
 
         if (featureData) {
             if (data.length > 0) {
@@ -582,7 +579,10 @@ function renderFeature(feature, bpStart, xScale, pixelHeight, ctx, options) {
  */
 function renderFeatureLabel(ctx, feature, featureX, featureX1, featureY, windowX, windowX1, genomicState, options) {
 
-    if (feature.name === undefined) return;
+    let name = feature.name;
+    if (name === undefined && feature.gene) name = feature.gene.name;
+    if (name === undefined) name = feature.id || feature.ID
+    if (name === undefined) return;
 
     // feature outside of viewable window
     let boxX;
@@ -601,7 +601,7 @@ function renderFeatureLabel(ctx, feature, featureX, featureX1, featureY, windowX
     if (genomicState.selection && GtexUtils.gtexLoaded) {
         // TODO -- for gtex, figure out a better way to do this
         gtexSelection = true;
-        geneColor = genomicState.selection.colorForGene(feature.name);
+        geneColor = genomicState.selection.colorForGene(name);
     }
 
 
@@ -620,7 +620,7 @@ function renderFeatureLabel(ctx, feature, featureX, featureX1, featureY, windowX
         const labelX = boxX + ((boxX1 - boxX) / 2);
         const labelY = getFeatureLabelY(featureY, transform);
 
-        const textBox = ctx.measureText(feature.name);
+        const textBox = ctx.measureText(name);
         const xleft = labelX - textBox.width / 2;
         const xright = labelX + textBox.width / 2;
         if (options.labelAllFeatures || xleft > options.rowLastX[feature.row] || gtexSelection) {
@@ -631,11 +631,11 @@ function renderFeatureLabel(ctx, feature, featureX, featureX1, featureY, windowX
             if (options.labelTransform) {
                 ctx.save();
                 options.labelTransform(ctx, labelX);
-                IGVGraphics.fillText(ctx, feature.name, labelX, labelY, geneFontStyle, undefined);
+                IGVGraphics.fillText(ctx, name, labelX, labelY, geneFontStyle, undefined);
                 ctx.restore();
 
             } else {
-                IGVGraphics.fillText(ctx, feature.name, labelX, labelY, geneFontStyle, transform);
+                IGVGraphics.fillText(ctx, name, labelX, labelY, geneFontStyle, transform);
             }
         }
     }
@@ -726,39 +726,39 @@ function renderJunctions(feature, bpStart, xScale, pixelHeight, ctx) {
     if (this.config.hideStrand === feature.strand) {
         return
     }
-    var uniquelyMappedReadCount = parseInt(feature.attributes.uniquely_mapped);
+    const uniquelyMappedReadCount = parseInt(feature.attributes.uniquely_mapped);
     if (uniquelyMappedReadCount < this.config.minUniquelyMappedReads) {
         return
     }
-    var multiMappedReadCount = parseInt(feature.attributes.multi_mapped);
-    var totalReadCount = uniquelyMappedReadCount + multiMappedReadCount;
+    const multiMappedReadCount = parseInt(feature.attributes.multi_mapped);
+    const totalReadCount = uniquelyMappedReadCount + multiMappedReadCount;
     if (totalReadCount < this.config.minTotalReads) {
         return
     }
     if (totalReadCount > 0 && multiMappedReadCount / totalReadCount > this.config.maxFractionMultiMappedReads) {
         return
     }
-    var maximumSplicedAlignmentOverhang = parseInt(feature.attributes.maximum_spliced_alignment_overhang);
+    const maximumSplicedAlignmentOverhang = parseInt(feature.attributes.maximum_spliced_alignment_overhang);
     if (maximumSplicedAlignmentOverhang < this.config.minSplicedAlignmentOverhang) {
         return
     }
 
-    var py = this.margin;
-    var rowHeight = this.height;
+    const py = this.margin;
+    const rowHeight = this.height;
 
-    var cy = py + 0.5 * rowHeight;
-    var topY = py;
-    var bottomY = py + rowHeight;
-    var bezierBottomY = bottomY - 10;
+    const cy = py + 0.5 * rowHeight;
+    let topY = py;
+    const bottomY = py + rowHeight;
+    const bezierBottomY = bottomY - 10;
 
     // draw the junction arc
-    var junctionLeftPx = Math.round((feature.start - bpStart) / xScale);
-    var junctionRightPx = Math.round((feature.end - bpStart) / xScale);
-    var junctionMiddlePx = (junctionLeftPx + junctionRightPx) / 2;
-    var bezierControlLeftPx = (junctionLeftPx + junctionMiddlePx) / 2;
-    var bezierControlRightPx = (junctionMiddlePx + junctionRightPx) / 2;
+    const junctionLeftPx = Math.round((feature.start - bpStart) / xScale);
+    const junctionRightPx = Math.round((feature.end - bpStart) / xScale);
+    const junctionMiddlePx = (junctionLeftPx + junctionRightPx) / 2;
+    const bezierControlLeftPx = (junctionLeftPx + junctionMiddlePx) / 2;
+    const bezierControlRightPx = (junctionMiddlePx + junctionRightPx) / 2;
 
-    var lineWidth;
+    let lineWidth;
     if (this.config.thicknessBasedOn === undefined || this.config.thicknessBasedOn === 'numUniqueReads') {
         lineWidth = uniquelyMappedReadCount;
     } else if (this.config.thicknessBasedOn === 'numReads') {
@@ -768,7 +768,7 @@ function renderJunctions(feature, bpStart, xScale, pixelHeight, ctx) {
     }
     lineWidth = 1 + Math.log(lineWidth + 1) / Math.log(12);
 
-    var bounceHeight;
+    let bounceHeight;
     if (this.config.bounceHeightBasedOn === undefined || this.config.bounceHeightBasedOn === 'random') {
         // randomly but deterministically stagger topY coordinates to reduce overlap
         bounceHeight = (feature.start + feature.end) % 7;
@@ -779,8 +779,10 @@ function renderJunctions(feature, bpStart, xScale, pixelHeight, ctx) {
     }
     topY += rowHeight * Math.max(7 - bounceHeight, 0) / 10;
 
-    var color;
-    if (this.config.colorBy === undefined || this.config.colorBy === 'numUniqueReads') {
+    let color;
+    if (feature.color) {
+        color = feature.color;  // Explicit setting
+    } else if (this.config.colorBy === undefined || this.config.colorBy === 'numUniqueReads') {
         color = uniquelyMappedReadCount > this.config.colorByNumReadsThreshold ? 'blue' : '#AAAAAA';  // color gradient?
     } else if (this.config.colorBy === 'numReads') {
         color = totalReadCount > this.config.colorByNumReadsThreshold ? 'blue' : '#AAAAAA';
@@ -792,7 +794,7 @@ function renderJunctions(feature, bpStart, xScale, pixelHeight, ctx) {
         color = JUNCTION_MOTIF_PALETTE.getColor(feature.attributes.motif);
     }
 
-    var label = '';
+    let label = '';
     if (this.config.labelUniqueReadCount === undefined && this.config.labelMultiMappedReadCount === undefined && this.config.labelTotalReadCount === undefined) {
         //default label
         label += uniquelyMappedReadCount + (multiMappedReadCount == 0 ? '' : '(+' + multiMappedReadCount + ')');

@@ -56,7 +56,8 @@ const knownFileExtensions = new Set([
     "bp",
     "snp",
     "rmsk",
-    "cram"
+    "cram",
+    "gwas"
 ]);
 
 /**
@@ -153,6 +154,9 @@ function inferTrackTypes(config) {
                     break;
                 case "bp":
                     config.type = "arc"
+                    break;
+                case "gwas":
+                    config.type = "gwas"
                     break;
                 default:
                     config.type = "annotation";

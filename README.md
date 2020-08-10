@@ -15,13 +15,13 @@ See the [Wiki](https://github.com/igvteam/igv.js/wiki) for more documentation.
  
 # Examples
  
-***[Alignments](https://igv.org/web/release/2.3.5/examples/cram.html)***
+***[Alignments](https://igv.org/web/release/2.6.2/examples/cram.html)***
 
-***[Copy number](https://igv.org/web/release/2.3.5/examples/copyNumber.html)***
+***[Copy number](https://igv.org/web/release/2.6.2/examples/copyNumber.html)***
 
-***[Multiple regions](https://igv.org/web/release/2.3.5/examples/multi-locus.html)***
+***[Multiple regions](https://igv.org/web/release/2.6.2/examples/multi-locus.html)***
 
-***[More](https://igv.org/web/release/2.3.5/examples/)***
+***[More](https://igv.org/web/release/2.6.2/examples/)***
 
  
 # Quickstart
@@ -30,11 +30,11 @@ See the [Wiki](https://github.com/igvteam/igv.js/wiki) for more documentation.
 igv.js consists of a single javascript file with no external dependencies.  To link directly to the current release copy this snippet
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/igv@2.3.5/dist/igv.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/igv@2.6.2/dist/igv.min.js"></script>
 ``` 
 
 Pre-built files for ES5 (igv.min.js) and ES6 (igv.esm.min.js)
-can be downloaded from [https://cdn.jsdelivr.net/npm/igv@2.3.5/dist/](https://cdn.jsdelivr.net/npm/igv@2.3.5/dist/).   
+can be downloaded from [https://cdn.jsdelivr.net/npm/igv@2.6.2/dist/](https://cdn.jsdelivr.net/npm/igv@2.6.2/dist/).   
  
 Alternatively you can install with npm  
  
@@ -48,11 +48,11 @@ To use igv.js include it with a script tag
 
 ***or*** import it as a requirejs module 
 
-```requirejs(['igv.min'], function (igv) {...}```   *(see [examples/igv-require.html](https://igv.org/web/release/2.3.5/examples/igv-require.html))*
+```requirejs(['igv.min'], function (igv) {...}```   *(see [examples/igv-require.html](https://igv.org/web/release/2.6.2/examples/igv-require.html))*
 
 ***or*** import it as an es6 module 
 
-```import igv from 'igv.esm.min.js'```  *(see [examples/igv-esm.html](https://igv.org/web/release/2.3.5/examples/igv-esm.html))*
+```import igv from 'igv.esm.min.js'```  *(see [examples/igv-esm.html](https://igv.org/web/release/2.6.2/examples/igv-esm.html))*
 
 
 
@@ -143,12 +143,12 @@ Then open [http://localhost:8080/examples](http://localhost:8080/examples).
 
 # Supported Browsers
 
-igv.js require a modern web browser with support for Javascript ECMAScript 2015. We test on the latest versions of 
-Chrome, Safari, Firefox, and Edge. 
-
+igv.js require a modern web browser with support for Javascript ECMAScript 2015. 
 
 # License
 
 igv.js is [MIT](/LICENSE) licensed.
+
+# [_Release Notes_](https://github.com/igvteam/igv.js/releases)
 
 

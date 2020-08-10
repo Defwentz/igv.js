@@ -6,7 +6,7 @@
     <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
     <meta content="" name="description">
     <meta content="" name="author">
-    <link href=../img/favicon.ico rel="shortcut icon">
+    <link href=img/favicon.ico rel="shortcut icon">
     <title>SVG - Dev</title>
 
     <!-- IGV CSS -->
@@ -41,7 +41,7 @@
 
 <script type="module">
 
-    import igv from "../js/api.js";
+    import igv from "../js/index.js";
     import google from "../js/google/googleUtils.js";
 
     (async () => {
@@ -64,7 +64,7 @@
         await createTrackList(document.getElementById('trackList'), 'testTracks.json', browser);
 
         $('#igv-draw-svg-button').on('click', () => {
-            browser.renderSVG({$container: $('#igv-svg-container')});
+            browser.saveSVGtoFile({$container: $('#igv-svg-container')});
         });
 
     })();

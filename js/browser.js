@@ -42,10 +42,10 @@ import {inferFileFormat, inferTrackTypes} from "./util/trackUtils.js";
 import {createIcon} from "./igv-icons.js";
 import {compressString, isString, numberFormatter, splitLines, uncompressString} from "./util/stringUtils.js"
 import {guid, pageCoordinates} from "./util/domUtils.js";
-import {decodeDataURI} from "./util/uriUtils.js";
+import {decodeDataURI, resolveURL} from "./util/uriUtils.js";
 import {doAutoscale, download, validateLocusExtent} from "./util/igvUtils.js";
 import google from "./google/googleUtils.js";
-import GtexUtils from "./gtex/gtexUtils.js"
+import GtexUtils from "./gtex/gtexUtils.js";
 
 
 const Browser = function (options, parentDiv) {
@@ -102,7 +102,7 @@ const Browser = function (options, parentDiv) {
 function initialize(options) {
     var genomeId;
 
-    if(options.gtex) {
+    if (options.gtex) {
         GtexUtils.gtexLoaded = true
     }
     this.flanking = options.flanking;
@@ -167,6 +167,10 @@ Browser.prototype.isMultiLocusMode = function () {
     return this.genomicStateList && this.genomicStateList.length > 1;
 };
 
+Browser.prototype.addTrackToFactory = function (name, track){
+    TrackFactory.addTrack(name, track);
+}
+
 Browser.prototype.isMultiLocusWholeGenomeView = function () {
 
     if (undefined === this.genomicStateList || 1 === this.genomicStateList.length) {
@@ -183,6 +187,7 @@ Browser.prototype.isMultiLocusWholeGenomeView = function () {
     return false;
 };
 
+// Render browser display as SVG
 Browser.prototype.toSVG = function () {
 
     const trackContainerBBox = this.trackContainerDiv.getBoundingClientRect();
@@ -240,7 +245,7 @@ Browser.prototype.toSVG = function () {
 
 };
 
-Browser.prototype.renderSVG = function (config) {
+Browser.prototype.saveSVGtoFile = function (config) {
 
     let svg = this.toSVG();
 
@@ -270,21 +275,19 @@ Browser.prototype.renderSVG = function (config) {
  */
 Browser.prototype.loadSession = async function (options) {
 
-    var self = this;
-
-    let session
+    this.roi = [];
+    let session;
     if (options.url || options.file) {
         session = await loadSessionFile(options)
     } else {
         session = options
     }
-    return self.loadSessionObject(session);
+    return this.loadSessionObject(session);
 
 
     async function loadSessionFile(options) {
 
         const urlOrFile = options.url || options.file
-
 
         if (options.url && (options.url.startsWith("blob:") || options.url.startsWith("data:"))) {
 
@@ -320,7 +323,7 @@ Browser.prototype.loadSessionObject = async function (session) {
 
     this.removeAllTracks(true);
 
-    const genome = await this.loadGenome(session.reference || session.genome, session.locus)
+    const genome = await this.loadGenome(session.reference || session.genome, session.locus, false)
 
     // Restore gtex selections.
     if (session.gtexSelections) {
@@ -352,29 +355,31 @@ Browser.prototype.loadSessionObject = async function (session) {
         session.tracks = [];
     }
     if (session.tracks.filter(track => track.type === 'sequence').length === 0) {
-        session.tracks.push({type: "sequence", order: -Number.MAX_VALUE})
+        session.tracks.push({type: "sequence", order: -Number.MAX_SAFE_INTEGER})
     }
 
     await this.loadTrackList(session.tracks);
 
     var panelWidth;
 
-    if (false !== session.showIdeogram && !this.ideoPanel) {
-        panelWidth = this.viewportContainerWidth() / this.genomicStateList.length;
-        this.ideoPanel = new IdeoPanel(this.$contentHeader, panelWidth, this);
+    if (false !== session.showIdeogram) {
+        if (!this.ideoPanel) {
+            panelWidth = this.viewportContainerWidth() / this.genomicStateList.length;
+            this.ideoPanel = new IdeoPanel(this.$contentHeader, panelWidth, this);
+        }
         this.ideoPanel.repaint();
+    }
+    if (this.rulerTrack) {
+        this.rulerTrack.trackView.updateViews();
     }
 
     this.updateLocusSearchWidget(this.genomicStateList[0]);
 
     this.windowSizePanel.updateWithGenomicState(this.genomicStateList[0]);
 
-    // Resize is called to address minor alignment problems with multi-locus view.
-    this.resize();
-
 }
 
-Browser.prototype.loadGenome = async function (idOrConfig, initialLocus) {
+Browser.prototype.loadGenome = async function (idOrConfig, initialLocus, update) {
 
     // idOrConfig might be json
     if (isString(idOrConfig) && idOrConfig.startsWith("{")) {
@@ -420,7 +425,9 @@ Browser.prototype.loadGenome = async function (idOrConfig, initialLocus) {
         await this.loadTrackList(genomeConfig.tracks);
     }
 
-    this.resize();    // Force recomputation and repaint
+    if (update !== false) {
+        this.updateViews();
+    }
     return this.genome;
 
 
@@ -443,7 +450,7 @@ Browser.prototype.loadGenome = async function (idOrConfig, initialLocus) {
 
             var reference = knownGenomes[genomeID];
             if (!reference) {
-                this.presentAlert("Uknown genome id: " + genomeID, undefined);
+                this.presentAlert("Unknown genome id: " + genomeID, undefined);
             }
             return reference;
         } else {
@@ -551,24 +558,10 @@ Browser.prototype.loadTrackList = async function (configList) {
 
     const self = this;
 
-    const unloadableTracks = configList.filter(function (config) {
-        return !knowHowToLoad(config);
-    })
-
-
-    if (unloadableTracks.length > 0) {
-        let message = "The following tracks could not be loaded.  Are these local files?";
-        unloadableTracks.forEach(function (config) {
-            message += ", " + config.name;
-        })
-        self.presentAlert(message);
-    }
-
-
     try {
         this.startSpinner();
         const promises = [];
-        configList.filter(knowHowToLoad).forEach(function (config) {
+        configList.forEach(function (config) {
             config.noSpinner = true;
             promises.push(self.loadTrack(config));
         });
@@ -584,20 +577,7 @@ Browser.prototype.loadTrackList = async function (configList) {
     } finally {
         this.stopSpinner();
     }
-
 };
-
-function knowHowToLoad(config) {
-
-    // config might be json
-    if (isString(config)) {
-        config = JSON.parse(config);
-    }
-
-    const url = config.url;
-    const features = config.features;
-    return undefined === url || isString(url) || url instanceof File;
-}
 
 Browser.prototype.loadROI = async function (config) {
     if (!this.roi) {
@@ -613,17 +593,23 @@ Browser.prototype.loadROI = async function (config) {
     await this.updateViews(undefined, undefined, true);
 }
 
-Browser.prototype.removeROI = function (roiToRemove) {                          
-    for (let i = 0; i < this.roi.length; i++) {                                 
-        if (this.roi[i].name === roiToRemove.name) {                            
-            this.roi.splice(i, 1);                                              
-            break;                                                              
-        }                                                                       
-    }                                                                           
-                                                                                
-    for (let tv of this.trackViews) {                                           
-        tv.updateViews(true);                                                   
-    }                                                                           
+Browser.prototype.removeROI = function (roiToRemove) {
+    for (let i = 0; i < this.roi.length; i++) {
+        if (this.roi[i].name === roiToRemove.name) {
+            this.roi.splice(i, 1);
+            break;
+        }
+    }
+    for (let tv of this.trackViews) {
+        tv.updateViews(undefined, undefined, true);
+    }
+}
+
+Browser.prototype.clearROIs = function () {
+    this.roi = [];
+    for (let tv of this.trackViews) {
+        tv.updateViews(undefined, undefined, true);
+    }
 }
 
 /**
@@ -640,34 +626,24 @@ Browser.prototype.loadTrack = async function (config) {
         config = JSON.parse(config);
     }
 
-    if (isString(config.url)) {
-        config.url = config.url.trim();
-    }
-    if (config.indexURL && isString(config.indexURL)) {
-        config.indexURL = config.indexURL.trim();
-    }
-
-    if (!knowHowToLoad(config)) {
-        this.presentAlert("The following track could not be loaded.  Is this a local file? " + config.name);
-        return;
+    // Resolve function and promise urls
+    let url = await resolveURL(config.url);
+    if (isString(url)) {
+        url = url.trim();
     }
 
-    if (isString(config.url) && config.url.startsWith("https://drive.google.com")) {
-        const json = await google.getDriveFileInfo(config.url)
-        config.url = "https://www.googleapis.com/drive/v3/files/" + json.id + "?alt=media";
+    if (isString(url) && url.startsWith("https://drive.google.com")) {
+        const json = await google.getDriveFileInfo(url)
+        url = "https://www.googleapis.com/drive/v3/files/" + json.id + "?alt=media";
         if (!config.filename) {
             config.filename = json.originalFileName || json.name;
         }
         if (!config.format) {
             config.format = inferFileFormat(config.filename);
         }
-        if (config.indexURL && config.indexURL.startsWith("https://drive.google.com")) {
-            config.indexURL = google.driveDownloadURL(config.indexURL);
-        }
-
     } else {
-        if (config.url && !config.filename) {
-            config.filename = getFilename(config.url);
+        if (url && !config.filename) {
+            config.filename = getFilename(url);
         }
     }
 
@@ -691,7 +667,7 @@ Browser.prototype.loadTrack = async function (config) {
         const newTrack = this.createTrack(config);
 
         if (undefined === newTrack) {
-            this.presentAlert("Unknown file type: " + config.url, undefined);
+            this.presentAlert("Unknown file type: " + url, undefined);
             return newTrack;
         }
 
@@ -763,6 +739,7 @@ Browser.prototype.createSingleTrack = function (config) {
     trackConfig.browser = this;
 
     let track
+
     switch (type) {
 
         case "annotation":
@@ -771,11 +748,11 @@ Browser.prototype.createSingleTrack = function (config) {
         case "junctions":
         case "splicejunctions":
         case "snp":
-            track = TrackFactory["feature"](trackConfig, this);
+            track = TrackFactory.getTrack("feature")(trackConfig, this);
             break;
         default:
-            if (TrackFactory.hasOwnProperty(type)) {
-                track = TrackFactory[type](trackConfig, this);
+            if (TrackFactory.tracks.hasOwnProperty(type)) {
+                track = TrackFactory.getTrack(type)(trackConfig, this);
             } else {
                 track = undefined;
             }
@@ -900,13 +877,11 @@ Browser.prototype.removeAllTracks = function (removeSequence) {
  */
 Browser.prototype.findTracks = function (property, value) {
 
-    var tracks = [];
-    this.trackViews.forEach(function (trackView) {
-        if (value === trackView.track[property]) {
-            tracks.push(trackView.track)
-        }
-    })
-    return tracks;
+    let f = typeof property === 'function' ?
+        trackView => property(trackView.track) :
+        trackView => value === trackView.track[property]
+
+    return this.trackViews.filter(f).map(tv => tv.track);
 };
 
 Browser.prototype.setTrackHeight = function (newHeight) {
@@ -1011,7 +986,7 @@ Browser.prototype.updateViews = async function (genomicState, views, force) {
     // Don't autoscale while dragging.
     if (self.dragObject) {
         for (let trackView of views) {
-            await trackView.updateViews();
+            await trackView.updateViews(force);
         }
     } else {
         // Group autoscale
@@ -1055,7 +1030,7 @@ Browser.prototype.updateViews = async function (genomicState, views, force) {
             for (let trackView of groupTrackViews) {
                 trackView.track.dataRange = dataRange;
                 trackView.track.autoscale = false;
-                await trackView.updateViews();
+                await trackView.updateViews(force);
             }
 
         }
@@ -1212,8 +1187,9 @@ Browser.prototype.zoomWithRangePercentage = function (percentage) {
     if (this.loadInProgress()) {
         return;
     }
-    let self = this;
-    this.trackViews[0].viewports.forEach((viewport) => {
+
+    const viewports = this.trackViews[0].viewports;
+    for (let viewport of viewports) {
 
         const referenceFrame = viewport.genomicState.referenceFrame;
         const centerBP = referenceFrame.start + referenceFrame.toBP(viewport.$viewport.width() / 2.0);
@@ -1226,13 +1202,14 @@ Browser.prototype.zoomWithRangePercentage = function (percentage) {
 
         referenceFrame.start = centerBP - (viewportWidthBP / 2);
         referenceFrame.bpPerPixel = bpp;
-        self.updateViews(viewport.genomicState);
+        referenceFrame.clamp(viewport.$viewport.width())
+        this.updateViews(viewport.genomicState);
 
         function lerp(v0, v1, t) {
             return (1 - t) * v0 + t * v1;
         }
 
-    });
+    }
 };
 
 Browser.prototype.zoomWithScaleFactor = function (scaleFactor, centerBPOrUndefined, viewportOrUndefined) {
@@ -1437,8 +1414,10 @@ Browser.prototype.emptyViewportContainers = function () {
 
     for (let trackView of this.trackViews) {
 
-        if (trackView.$outerScroll) {
-            trackView.$outerScroll.remove();
+        if (trackView.scrollbar) {
+            trackView.scrollbar.$outerScroll.remove()
+            trackView.scrollbar = null
+            trackView.scrollbar = undefined
         }
 
         for (let viewport of trackView.viewports) {
@@ -1448,9 +1427,7 @@ Browser.prototype.emptyViewportContainers = function () {
             }
 
             if (viewport.popover) {
-                viewport.popover.$popover.off();
-                viewport.popover.$popover.empty();
-                viewport.popover.$popover.remove();
+                viewport.popover.dispose()
             }
 
             viewport.$viewport.remove();
@@ -1470,7 +1447,7 @@ Browser.prototype.buildViewportsWithGenomicStateList = function (genomicStateLis
     var width;
 
     width = this.viewportContainerWidth() / this.genomicStateList.length;
-
+    console.log("build viewports width = " + width);
     this.trackViews.forEach(function (trackView) {
 
         genomicStateList.forEach(function (genomicState) {
@@ -1512,7 +1489,9 @@ Browser.prototype.search = async function (string, init) {
 
     const genome = this.genome
 
-    if (string && string.trim().toLowerCase() === "all") string = "all";
+    if (string && string.trim().toLowerCase() === "all" || string === "*") {
+        string = "all";
+    }
 
     const loci = string.split(' ')
 
@@ -1571,7 +1550,7 @@ Browser.prototype.search = async function (string, init) {
                 genomicState.locusSearchString = locus;
                 result.push(genomicState);
             } else {
-                // Try local feature cache.    This is created from feature tracks tagged "searchable"
+                // Try local feature cache.    This is created from feature tracks tagged "searcsearchablehable"
                 const feature = self.featureDB[locus.toUpperCase()];
                 if (feature) {
                     const chromosome = self.genome.getChromosome(feature.chr);
@@ -1636,9 +1615,16 @@ Browser.prototype.search = async function (string, init) {
                 return undefined;
             } else {
 
-                // Ingoring all but first result for now
-                // TODO -- present all and let user select if results.length > 1
-                const result = results[0];
+                let result;
+                if (Array.isArray(results)) {
+                    // Ignoring all but first result for now
+                    // TODO -- present all and let user select if results.length > 1
+                    result = results[0];
+                } else {
+                    // When processing search results from Ensembl REST API
+                    // Example: https://rest.ensembl.org/lookup/symbol/macaca_fascicularis/BRCA2?content-type=application/json
+                    result = results;
+                }
 
                 if (!(result.hasOwnProperty(searchConfig.chromosomeField) && (result.hasOwnProperty(searchConfig.startField)))) {
                     console.log("Search service results must include chromosome and start fields: " + result);
@@ -1972,6 +1958,18 @@ Browser.prototype.sessionURL = function () {
 
 }
 
+Browser.prototype.currentLoci = function () {
+    const loci = [];
+    const anyTrackView = this.trackViews[0];
+    for (let viewport of anyTrackView.viewports) {
+        const genomicState = viewport.genomicState;
+        const pixelWidth = viewport.$viewport[0].clientWidth;
+        const locusString = genomicState.referenceFrame.showLocus(pixelWidth);
+        loci.push(locusString);
+    }
+    return loci;
+}
+
 Browser.prototype.presentAlert = function (alert) {
     this.alertDialog.present(alert);
 };
@@ -2046,7 +2044,7 @@ Browser.prototype.updateTrackDrag = function (dragDestination) {
             for (let i = indexDestination + 1; i < nTracks; i++) {
                 const track = trackViews[i].track;
                 if (track.order <= lastOrder) {
-                    track.order = Math.min(Number.MAX_VALUE, lastOrder + 1);
+                    track.order = Math.min(Number.MAX_SAFE_INTEGER, lastOrder + 1);
                     lastOrder = track.order;
                 } else {
                     break;
@@ -2057,7 +2055,7 @@ Browser.prototype.updateTrackDrag = function (dragDestination) {
             for (let i = indexDestination - 1; i > 0; i--) {
                 const track = trackViews[i].track;
                 if (track.order >= lastOrder) {
-                    track.order = Math.max(-Number.MAX_VALUE, lastOrder - 1);
+                    track.order = Math.max(-Number.MAX_SAFE_INTEGER, lastOrder - 1);
                     lastOrder = track.order;
                 } else {
                     break;

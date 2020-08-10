@@ -6,7 +6,7 @@
     <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
     <meta content="" name="description">
     <meta content="" name="author">
-    <link href=../img/favicon.ico rel="shortcut icon">
+    <link href=img/favicon.ico rel="shortcut icon">
     <title>IGV - Dev</title>
 
     <!-- IGV CSS -->
@@ -23,26 +23,25 @@
 
 <script type="module">
 
-    import igv from "../js/api.js";
+    import igv from "../js/index.js";
 
     var options =
         {
-            reference: {
-                fastaURL: "../drive-download-20191024T140251Z-001/subpiece_ref.fa",
-                indexURL: "../drive-download-20191024T140251Z-001/subpiece_ref.fa.fai"
-            },
+            genome: "hg19",
+            locus: "3:185791817-185791856",
             tracks: [
                 {
                     type: 'alignment',
                     format: 'bam',
-                    url: '../drive-download-20191024T140251Z-001/subpiece.bam',
-                    index: '../drive-download-20191024T140251Z-001/subpiece.bam.bai',
-                    name: 'subpiece'
+                    url: 'https://s3.amazonaws.com/igv.org.demo/deep_coverage.bam',
+                    indexURL: 'https://s3.amazonaws.com/igv.org.demo/deep_coverage.bam.bai',
+                    samplingDepth: '2000',
+                    alignmentRowHeight: 10,
+                    colorBy: "strand",
+                    name: 'TEST'
                 }
-            ],
-            samplingDepth: 5,
-            samplingWindowSize: 1000
-        };
+            ]
+        }
 
     var igvDiv = document.getElementById("igvDiv");
 

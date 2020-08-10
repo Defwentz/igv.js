@@ -1,4 +1,5 @@
 import runBigwigTests from "./testBigwig.js";
+import runBigbedTests from "./testBigbed.js";
 import runBAMTests from "./testBAM.js";
 import runBAMIndexTests from "./testBamIndex.js";
 import runAedTests from "./testAED.js";
@@ -22,9 +23,11 @@ import runUtilTests from "./testUtils.js";
 import runIgvXhrTests from "./testIgvXhr.js";
 import runCRAMTests from "./testCRAM.js";
 import runTribbleTests from "./testTribble.js";
+import runBedpeTests from "./testBedpe.js";
 
-
+runBedpeTests();
 runBigwigTests();
+runBigbedTests();
 runBAMTests();
 runBAMIndexTests();
 runAedTests();
@@ -40,7 +43,7 @@ runTabixTests();
 runGenomeTests();
 runTDFTests();
 runSampleInformationTests();
-runHtsgetTests();
+//runHtsgetTests();
 runSessionTests();
 runVariantTests();
 runBrowserTests();

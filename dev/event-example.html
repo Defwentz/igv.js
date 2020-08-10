@@ -46,7 +46,7 @@
 
 <script type="module">
 
-    import igv from "../js/api.js";
+    import igv from "../js/index.js";
 
     var HASH_PREFIX = "#/locus/";
     var currentHash = window.location.hash;
@@ -63,6 +63,7 @@
             console.log("Created IGV browser");
 
             browser.on('locuschange', function (referenceFrame) {
+                console.log('locuschange')
                 window.location.replace(HASH_PREFIX + referenceFrame.label);
             });
         });

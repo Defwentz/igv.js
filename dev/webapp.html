@@ -6,7 +6,7 @@
     <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
     <meta content="" name="description">
     <meta content="" name="author">
-    <link href=../img/favicon.ico rel="shortcut icon">
+    <link href=img/favicon.ico rel="shortcut icon">
     <title>IGV - Dev</title>
 
     <!-- IGV CSS -->
@@ -28,15 +28,14 @@
 
 <script type="module">
 
-    import igv from "../js/api.js";
+    import igv from "../js/index.js";
 
     let browser;
     const options =
         {
             queryParametersSupported: true,
             showChromosomeWidget: true,
-            genome: "hg19",
-            apiKey: "AIzaSyDUUAUFpQEN4mumeMNIRWXSiTh5cPtUAD0",
+            genome: "hg19"
         };
 
     igv.createBrowser(document.getElementById('igvDiv'), options)

@@ -52,6 +52,8 @@ $igv-trackgear-popover-border-radius: 4px;
 $igv-trackgear-font-color: #4b4b4b;
 $igv-trackgear-default-font-face: 'Open Sans', sans-serif;
 
+$igv-track-components-margin: 0px;
+
 @mixin generic-input {
 
   input {
@@ -77,13 +79,11 @@ $igv-trackgear-default-font-face: 'Open Sans', sans-serif;
 
 }
 
-@import "igv-user-feedback";
-@import "igv-colorpicker";
-@import "igv-alert-dialog";
 @import "igv-generic-container";
 @import "igv-generic-dialog-container";
 @import "igv-popover";
 @import "igv-trackgear-popup";
+@import "igv-user-feedback";
 
 .igvControlDiv {
   position: relative;
@@ -187,16 +187,16 @@ $igv-trackgear-default-font-face: 'Open Sans', sans-serif;
 
   // igv logo
   .igv-logo {
+    all: initial;
     width: 34px;
     height: $igv-navbar-height;
-    margin-top:6px;
+    //margin-top:6px;
     //margin-left: 8px;
     margin-right: 8px;
   }
 
   .igv-current-genome {
     height: $igv-navbar-height;
-    width: 40px;
     margin-left: 4px;
     margin-right: 4px;
     user-select: none;
@@ -556,8 +556,13 @@ $igv-trackgear-default-font-face: 'Open Sans', sans-serif;
     font-weight: 700;
     color: #141414;
   }
-
 }
+
+.igv-canvas {
+  all: initial;
+}
+
+
 
 // root container
 .igv-root-div {
@@ -809,8 +814,9 @@ $igv-trackgear-default-font-face: 'Open Sans', sans-serif;
   right: 0;
   width: 36px;
   height: 100%;
-
   background: white;
+  margin-top: $igv-track-components-margin;
+  margin-bottom: $igv-track-components-margin;
   //text-align: center;
 
 }
@@ -845,9 +851,11 @@ $igv-trackgear-default-font-face: 'Open Sans', sans-serif;
   position: absolute;
   left: 0;
   top: 0;
-
   width: 100%;
   height: 100%;
+  margin-top: $igv-track-components-margin;
+  margin-bottom: $igv-track-components-margin;
+
 
   z-index: 256;
   background-color: $igv-ruler-sweeper-color;
@@ -897,7 +905,7 @@ $igv-trackgear-default-font-face: 'Open Sans', sans-serif;
   position: absolute;
 
   left: 8px;
-  top: 4px;
+  top: 8px;
 
   width: auto;
   height:auto;
