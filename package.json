@@ -11,7 +11,7 @@
   "scripts": {
     "build": "node scripts/updateVersion.js && node scripts/generateEmbedCss.js && npx rollup --config",
     "test": "node runTests.js",
-    "prepack": "npm run build",
+    "prepack": "npm install && npm run build",
     "http-server": "npx http-server ."
   },
   "author": {
